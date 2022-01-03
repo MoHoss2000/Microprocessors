@@ -1,5 +1,5 @@
 public class ReservationStation {
-	
+
     boolean busy;
     String op;
     double vj;
@@ -7,8 +7,11 @@ public class ReservationStation {
     String qj;
     String qk;
     String a;
-    
-    public ReservationStation(){
 
+    double result;
+
+
+    public String toString() {
+        return busy + " " + op + " " + vj + " " + vk + " " + qj + " " + qk;
     }
 }

@@ -3,8 +3,9 @@ public class StoreBuffer {
     String a;
     String v;
     String q;
-    public StoreBuffer(){
 
+    public String toString() {
+        return busy + " " + a + " " + v + " " + q;
     }
 
 }

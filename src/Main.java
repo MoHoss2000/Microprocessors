@@ -25,13 +25,15 @@ public class Main {
     int storeLatency;
     int loadLatency;
 
+    int issueInstruction;
+
     String fileName;
     ArrayList<String> program;
 
     // should we handle the scenario where the queue is less than the size of the program ?!
 
     public Main(int addLatency, int subLatency, int mulLatency,
-                int divLatency, int storeLatency, int loadLatency,
+                int divLatency, int loadLatency, int storeLatency,
                 String fileName) {
         multiply = new ReservationStation[2];
         add = new ReservationStation[3];
@@ -44,6 +46,14 @@ public class Main {
 
         for (int i = 0; i < add.length; i++) {
             add[i] = new ReservationStation();
+        }
+
+        for (int i = 0; i < load.length; i++) {
+            load[i] = new LoadBuffer();
+        }
+
+        for (int i = 0; i < store.length; i++) {
+            store[i] = new StoreBuffer();
         }
 
         registerFile = new RegisterFile(16);
@@ -61,28 +71,93 @@ public class Main {
 
         program = readFile(fileName);
         issuedInstructions = new ArrayList<String>();
-        queue = new QueueCell[program.size()]; //how big should it be ?
+        queue = new QueueCell[20]; //how big should it be ?
 
-        for (int i = 0; i < queue.length; i++) {
+        for (int i = 0; i < program.size(); i++) {
             queue[i] = new QueueCell(program.get(i));
         }
-        printQueue();
+
+        registerFile.value[2] = 2;
+        registerFile.value[4] = 4;
+
+
+        // printQueue();
 
         runProgram();
     }
 
     public void printQueue() {
-        for (QueueCell cell : queue
-        ) {
-            System.out.println(cell);
+        for (int i = 0; i < program.size(); i++) {
+
+            QueueCell cell = queue[i];
+            System.out.println(i + ": " + cell);
         }
     }
 
+    public void printRegisterFile() {
+        System.out.println("==========================");
+        System.out.println("Register File");
+        System.out.println("==========================");
+        for (int i = 0; i < registerFile.qi.length; i++) {
+
+            System.out.println("F" + i + ": " + registerFile.qi[i] + " " + registerFile.value[i]);
+        }
+        System.out.println();
+    }
+
+    public void printReservationStations() {
+
+        System.out.println("==========================");
+        System.out.println("Add reservation stations");
+        System.out.println("==========================");
+        for (int i = 0; i < add.length; i++) {
+            System.out.println(i + ": " + add[i]);
+        }
+
+        System.out.println();
+
+        System.out.println("==========================");
+        System.out.println("Multiply reservation stations");
+        System.out.println("==========================");
+        for (int i = 0; i < multiply.length; i++) {
+            System.out.println(i + ": " + multiply[i]);
+        }
+
+        System.out.println();
+
+        System.out.println("==========================");
+        System.out.println("Load buffer");
+        System.out.println("==========================");
+        for (int i = 0; i < load.length; i++) {
+            System.out.println(i + ": " + load[i]);
+        }
+
+        System.out.println();
+
+        System.out.println("==========================");
+        System.out.println("Store buffer");
+        System.out.println("==========================");
+        for (int i = 0; i < store.length; i++) {
+            System.out.println(i + ": " + store[i]);
+        }
+
+        System.out.println();
+    }
+
     public boolean allWroteBack() {
-        for (QueueCell queueCell : queue
-        ) {
+        for (int i = 0; i < program.size(); i++) {
             // didnt write back
-            if (queueCell.writeResult == 0) {
+            if (queue[i].writeResult == 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public boolean allIssued() {
+        for (int i = 0; i < program.size(); i++) {
+            if (queue[i].issue == 0) {
                 return false;
             }
         }
@@ -108,91 +183,235 @@ public class Main {
         return -1;
     }
 
+    public int checkFreeLoadBuffer() {
+        for (int i = 0; i < load.length; i++) {
+            if (!load[i].busy)
+                return i;
+        }
+
+        return -1;
+    }
+
+    public int checkFreeStoreBuffer() {
+        for (int i = 0; i < store.length; i++) {
+            if (!store[i].busy)
+                return i;
+        }
+
+        return -1;
+    }
+
+    public void executeInstruction(QueueCell queueCell) {
+        String reservationStation = queueCell.reservationStation;
+        int reservationStationIndex = Integer.parseInt(reservationStation.substring(1));
+
+        switch (queueCell.instruction) {
+            case "ADD.D":
+                add[reservationStationIndex].result = add[reservationStationIndex].vj
+                        + add[reservationStationIndex].vk;
+
+//                System.out.println(add[reservationStationIndex].result);
+                break;
+            case "SUB.D":
+                add[reservationStationIndex].result = add[reservationStationIndex].vj
+                        - add[reservationStationIndex].vk;
+
+//                System.out.println(add[reservationStationIndex].result);
+
+                break;
+            case "MUL.D":
+                multiply[reservationStationIndex].result = multiply[reservationStationIndex].vj
+                        * multiply[reservationStationIndex].vk;
+
+//                System.out.println(multiply[reservationStationIndex].result);
+
+                break;
+            case "DIV.D":
+                multiply[reservationStationIndex].result = multiply[reservationStationIndex].vj
+                        / multiply[reservationStationIndex].vk;
+                break;
+            case "L.D":
+                load[reservationStationIndex].result = memory[Integer.parseInt(load[reservationStationIndex].a)];
+                break;
+        }
+    }
+
+    public void broadcastResult(double value, String reservationStation) {
+        for (int i = 0; i < add.length; i++) {
+            if (add[i].qj != null && add[i].qj.equals(reservationStation)) {
+                add[i].qj = null;
+                add[i].vj = value;
+            }
+
+            if (add[i].qk != null && add[i].qk.equals(reservationStation)) {
+                add[i].qk = null;
+                add[i].vk = value;
+            }
+        }
+
+        for (int i = 0; i < multiply.length; i++) {
+            if (multiply[i].qj != null && multiply[i].qj.equals(reservationStation)) {
+                multiply[i].qj = null;
+                multiply[i].vj = value;
+            }
+
+            if (multiply[i].qk != null && multiply[i].qk.equals(reservationStation)) {
+                multiply[i].qk = null;
+                multiply[i].vk = value;
+            }
+        }
+
+        for (int i = 0; i < store.length; i++) {
+            if (store[i] != null && store[i].q != null && store[i].q.equals(reservationStation)) {
+                store[i].q = null;
+                store[i].v = value + "";
+            }
+        }
+    }
+
     public void runProgram() {
 
         while (!allWroteBack()) {
-            boolean someoneIssued = false;
 
-            for (QueueCell queueCell : queue
-            ) {
-                // not issued
-                if (queueCell.issue == 0 && !someoneIssued) {
-                    someoneIssued = true;
-                    switch (queueCell.instruction) {
-                        case "ADD.D":
-                        case "SUB.D":
-                            int freeStationIndex = checkFreeAddStation();
+            System.out.println("Cycle No: " + clock);
 
-                            if (freeStationIndex != -1) {
-                                add[freeStationIndex].busy = true;
-                                add[freeStationIndex].op = queueCell.instruction;
+            if (issueInstruction < program.size() && queue[issueInstruction].issue == 0) {
+                QueueCell queueCell = queue[issueInstruction];
 
-                                int i = Integer.parseInt(queueCell.i.substring(1));
-                                int j = Integer.parseInt(queueCell.j.substring(1));
-                                int k = Integer.parseInt(queueCell.k.substring(1));
+                switch (queueCell.instruction) {
+                    case "ADD.D":
+                    case "SUB.D":
+                        int freeStationIndex = checkFreeAddStation();
 
-                                if (registerFile.qi[j] == null) {
-                                    add[freeStationIndex].vj = registerFile.value[j];
-                                } else {
-                                    add[freeStationIndex].qj = registerFile.qi[j];
-                                }
+                        if (freeStationIndex != -1) {
+                            queueCell.issue = clock;
+                            issueInstruction++;
 
-                                if (registerFile.qi[k] == null) {
-                                    add[freeStationIndex].vk = registerFile.value[k];
-                                } else {
-                                    add[freeStationIndex].qk = registerFile.qi[k];
-                                }
+                            add[freeStationIndex].busy = true;
+                            add[freeStationIndex].op = queueCell.instruction;
 
-                                registerFile.qi[i] = "A" + freeStationIndex;
-                                queueCell.reservationStation = "A" + freeStationIndex;
+                            int i = Integer.parseInt(queueCell.i.substring(1));
+                            int j = Integer.parseInt(queueCell.j.substring(1));
+                            int k = Integer.parseInt(queueCell.k.substring(1));
+
+                            if (registerFile.qi[j] == null) {
+                                add[freeStationIndex].vj = registerFile.value[j];
+                            } else {
+                                add[freeStationIndex].qj = registerFile.qi[j];
                             }
 
-                            break;
-                        case "MUL.D":
-                        case "DIV.D":
-                            int multStationIndex = checkFreeAddStation();
-
-                            if (multStationIndex != -1) {
-                                multiply[multStationIndex].busy = true;
-                                multiply[multStationIndex].op = queueCell.instruction;
-
-                                int i = Integer.parseInt(queueCell.i.substring(1));
-                                int j = Integer.parseInt(queueCell.j.substring(1));
-                                int k = Integer.parseInt(queueCell.k.substring(1));
-
-                                if (registerFile.qi[j] == null) {
-                                    multiply[multStationIndex].vj = registerFile.value[j];
-                                } else {
-                                    multiply[multStationIndex].qj = registerFile.qi[j];
-                                }
-
-                                if (registerFile.qi[k] == null) {
-                                    multiply[multStationIndex].vk = registerFile.value[k];
-                                } else {
-                                    multiply[multStationIndex].qk = registerFile.qi[k];
-                                }
-
-                                registerFile.qi[i] = "M" + multStationIndex;
-                                queueCell.reservationStation = "M" + multStationIndex;
-
+                            if (registerFile.qi[k] == null) {
+                                add[freeStationIndex].vk = registerFile.value[k];
+                            } else {
+                                add[freeStationIndex].qk = registerFile.qi[k];
                             }
-                            break;
-                        case "L.D":
 
-                            break;
+                            registerFile.qi[i] = "A" + freeStationIndex;
+                            queueCell.reservationStation = "A" + freeStationIndex;
+                        }
 
-                        case "S.D":
-                            break;
+                        break;
+                    case "MUL.D":
+                    case "DIV.D":
+                        int multStationIndex = checkFreeMulStation();
 
-                    }
+                        if (multStationIndex != -1) {
+                            queueCell.issue = clock;
+
+                            issueInstruction++;
+
+                            multiply[multStationIndex].busy = true;
+                            multiply[multStationIndex].op = queueCell.instruction;
+
+                            int i = Integer.parseInt(queueCell.i.substring(1));
+                            int j = Integer.parseInt(queueCell.j.substring(1));
+                            int k = Integer.parseInt(queueCell.k.substring(1));
+
+                            if (registerFile.qi[j] == null) {
+                                multiply[multStationIndex].vj = registerFile.value[j];
+                            } else {
+                                multiply[multStationIndex].qj = registerFile.qi[j];
+                            }
+
+                            if (registerFile.qi[k] == null) {
+                                multiply[multStationIndex].vk = registerFile.value[k];
+                            } else {
+                                multiply[multStationIndex].qk = registerFile.qi[k];
+                            }
+
+                            registerFile.qi[i] = "M" + multStationIndex;
+                            queueCell.reservationStation = "M" + multStationIndex;
+
+                        }
+                        break;
+                    case "L.D":
+                        int loadBufferIndex = checkFreeLoadBuffer();
+
+                        if (loadBufferIndex != -1) {
+                            queueCell.issue = clock;
+
+                            issueInstruction++;
+
+                            load[loadBufferIndex].busy = true;
+
+                            int i = Integer.parseInt(queueCell.i.substring(1)); // register to write in
+                            int j = Integer.parseInt(queueCell.j); // address
+
+
+                            load[loadBufferIndex].a = "" + j;
+
+                            registerFile.qi[i] = "L" + loadBufferIndex;
+                            queueCell.reservationStation = "L" + loadBufferIndex;
+
+                        }
+                        break;
+
+                    case "S.D":
+                        int storeBufferIndex = checkFreeStoreBuffer();
+
+                        if (storeBufferIndex != -1) {
+                            queueCell.issue = clock;
+
+                            issueInstruction++;
+
+                            store[storeBufferIndex].busy = true;
+
+                            int i = Integer.parseInt(queueCell.i.substring(1)); // register to write in
+                            int j = Integer.parseInt(queueCell.j); // address
+
+                            if (registerFile.qi[i] == null) {
+                                // has correct value
+
+                                store[storeBufferIndex].v = "" + registerFile.value[i];
+                            } else {
+                                store[storeBufferIndex].q = registerFile.qi[i];
+                            }
+
+                            store[storeBufferIndex].a = "" + j;
+
+                            queueCell.reservationStation = "S" + storeBufferIndex;
+
+                        }
+                        break;
                 }
+            }
+
+
+            boolean someoneWroteBack = false;
+            for (int programIndex = 0; programIndex < program.size(); programIndex++) {
+                QueueCell queueCell = queue[programIndex];
+
 
                 // issued but didnt begin
-                if (queueCell.issue != 0 && queueCell.executionBegin == 0) {
+                if (queueCell.issue != 0 && queueCell.executionBegin == 0 && queueCell.issue != clock) {
+
+
                     String reservationStation = queueCell.reservationStation;
 
-                    String type = reservationStation.substring(0, 1);
+
+                    String type = reservationStation.charAt(0) + "";
                     int index = Integer.parseInt(reservationStation.substring(1));
+
 
                     switch (type) {
                         case "A":
@@ -202,13 +421,163 @@ public class Main {
 
                             break;
                         case "M":
-//                            multiply[index];
+                            if (multiply[index].qk == null && multiply[index].qj == null) {
+                                queueCell.executionBegin = clock;
+                            }
+                            break;
+                        case "L":
+                            queueCell.executionBegin = clock;
+                            break;
+                        case "S":
+                            if (store[index].q == null) {
+                                queueCell.executionBegin = clock;
+                            }
+
+                            break;
+                    }
+                }
+
+                if (queueCell.issue != 0 && queueCell.executionBegin != 0 && queueCell.executionEnd == 0) {
+                    String reservationStation = queueCell.reservationStation;
+
+                    int end = queueCell.executionBegin - 1;
+                    switch (queueCell.instruction) {
+                        case "ADD.D":
+                            end += addLatency;
+                            break;
+                        case "SUB.D":
+                            end += subLatency;
+                            break;
+                        case "MUL.D":
+                            end += mulLatency;
+                            break;
+                        case "DIV.D":
+                            end += divLatency;
+                            break;
+                        case "L.D":
+                            end += loadLatency;
+                            break;
+                        case "S.D":
+                            end += storeLatency;
+                            break;
                     }
 
+                    if (end == clock) {
+                        // execute instruction
+                        executeInstruction(queueCell);
+
+                        queueCell.executionEnd = clock;
+                    }
                 }
 
             }
+
+            for (int i = 0; i < program.size(); i++) {
+                QueueCell queueCell = queue[i];
+
+                if (queueCell.writeResult == 0 && queueCell.executionEnd + 1 <= clock
+                        && queueCell.executionEnd != 0 && !someoneWroteBack) {
+
+                    String reservationStation = queueCell.reservationStation;
+                    int reservationStationIndex = Integer.parseInt(reservationStation.substring(1));
+
+                    queueCell.writeResult = clock;
+                    someoneWroteBack = true;
+
+                    switch (queueCell.instruction) {
+                        case "ADD.D":
+                        case "SUB.D":
+                            double addResult = add[reservationStationIndex].result;
+                            int wbRegister = Integer.parseInt(queueCell.i.substring(1));
+
+                            if (registerFile.qi[wbRegister] != null &&
+                                    registerFile.qi[wbRegister].equals(queueCell.reservationStation)) {
+                                registerFile.qi[wbRegister] = null;
+                                registerFile.value[wbRegister] = addResult;
+                            }
+
+                            System.out.println();
+                            System.out.println("Reservation station " + reservationStation + " wrote the value " +
+                                    +addResult + " to the bus"
+                            );
+                            System.out.println();
+
+                            broadcastResult(addResult, reservationStation);
+
+                            add[reservationStationIndex] = new ReservationStation();
+                            break;
+                        case "MUL.D":
+                        case "DIV.D":
+                            double multiplyResult = add[reservationStationIndex].result;
+                            int wbRegisterMul = Integer.parseInt(queueCell.i.substring(1));
+
+                            if (registerFile.qi[wbRegisterMul] != null &&
+                                    registerFile.qi[wbRegisterMul].equals(queueCell.reservationStation)) {
+                                registerFile.qi[wbRegisterMul] = null;
+                                registerFile.value[wbRegisterMul] = multiplyResult;
+                            }
+
+                            System.out.println();
+                            System.out.println("Reservation station " + reservationStation + " wrote the value " +
+                                    +multiplyResult + " to the bus"
+                            );
+                            System.out.println();
+
+                            broadcastResult(multiplyResult, reservationStation);
+
+                            multiply[reservationStationIndex] = new ReservationStation();
+                            break;
+                        case "L.D":
+                            double loadResult = load[reservationStationIndex].result;
+                            int wbRegisterLoad = Integer.parseInt(queueCell.i.substring(1));
+
+                            if (registerFile.qi[wbRegisterLoad] != null &&
+                                    registerFile.qi[wbRegisterLoad].equals(queueCell.reservationStation)) {
+                                registerFile.qi[wbRegisterLoad] = null;
+                                registerFile.value[wbRegisterLoad] = loadResult;
+                            }
+
+                            System.out.println();
+                            System.out.println("Reservation station " + reservationStation + " wrote the value " +
+                                    +loadResult + " to the bus"
+                            );
+                            System.out.println();
+
+                            broadcastResult(loadResult, reservationStation);
+
+                            load[reservationStationIndex] = new LoadBuffer();
+
+                            break;
+                        case "S.D":
+                            int memoryAddress = Integer.parseInt(store[reservationStationIndex].a);
+                            double value = Double.parseDouble(store[reservationStationIndex].v);
+
+
+                            System.out.println();
+                            System.out.println("Reservation station " + reservationStation + " wrote the value " +
+                                    +value + " to the bus"
+                            );
+
+                            System.out.println();
+
+                            memory[memoryAddress] = value;
+
+                            store[reservationStationIndex] = new StoreBuffer();
+                            break;
+                    }
+                }
+            }
+
+
+            printQueue();
+            printReservationStations();
+            printRegisterFile();
+
+            System.out.println();
+            clock++;
         }
+
+        System.out.println(memory[49]);
     }
 
     public static void main(String[] args) {

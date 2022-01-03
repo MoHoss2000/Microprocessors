@@ -1,7 +1,9 @@
 public class LoadBuffer {
     boolean busy;
     String a;
-    public LoadBuffer(){
+    double result;
 
+    public String toString() {
+        return busy + " " + a;
     }
 }
