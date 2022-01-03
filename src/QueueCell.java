@@ -10,10 +10,10 @@ public class QueueCell {
     int writeResult;
 
     String reservationStation;
-    double value;
 
-    public QueueCell(String instructionString, int issue ){
-        this.issue = issue;
+
+    public QueueCell(String instructionString) {
+
 
         String[] splitted = instructionString.split(" ");
 
@@ -27,5 +27,10 @@ public class QueueCell {
             k = splitted[2];
         }
 
+    }
+
+    public String toString() {
+        return instruction + " " + i + " " + j + " " + k + " " + issue + " "
+                + executionBegin + " " + executionEnd + " " + writeResult;
     }
 }

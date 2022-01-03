@@ -4,7 +4,6 @@ public class RegisterFile {
     public RegisterFile(int regNo){
         qi=new String[regNo];
         value=new double[regNo];
-
     }
 
 }
